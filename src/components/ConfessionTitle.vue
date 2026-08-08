@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 
 defineProps<{
   name?: string
 }>()
 
 const displayName = computed(() => '可可')
-
-const nameParts = displayName.value.split('')
 </script>
 
 <template>

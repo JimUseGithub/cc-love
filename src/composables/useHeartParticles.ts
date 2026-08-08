@@ -22,8 +22,6 @@ const HEART_COLORS = [
   '#ffb3c6',
 ]
 
-const HEART_PATH = new Path2D()
-
 function buildHeartPath(size: number): Path2D {
   const s = size
   const path = new Path2D()
