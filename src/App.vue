@@ -7,10 +7,13 @@ import MeteorShower from './components/MeteorShower.vue'
 import StarrySky from './components/StarrySky.vue'
 import ParticleCanvas from './components/ParticleCanvas.vue'
 import ConfessionPopup from './components/ConfessionPopup.vue'
+import EasterEggOverlay from './components/EasterEggOverlay.vue'
 
 const showPopup = ref(false)
+const clickCount = ref(0)
 const particleCanvasRef = ref<InstanceType<typeof ParticleCanvas>>()
 const heartRef = ref<InstanceType<typeof AnimatedHeart>>()
+const easterEggRef = ref<InstanceType<typeof EasterEggOverlay>>()
 const audioRef = ref<HTMLAudioElement>()
 
 // Store heart center for reassemble
@@ -26,6 +29,8 @@ onMounted(() => {
 })
 
 function onHeartClick(e: MouseEvent) {
+  clickCount.value++
+
   // Get heart center for the burst origin
   const target = e.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
@@ -35,10 +40,24 @@ function onHeartClick(e: MouseEvent) {
   // Dramatic heart-shatter burst
   particleCanvasRef.value?.shatterBurst(heartCenter.x, heartCenter.y, 55)
 
-  // Show confession popup after shatter animation
+  // Every 5th click: trigger easter egg instead of normal popup
+  if (clickCount.value % 5 === 0) {
+    setTimeout(() => {
+      easterEggRef.value?.play()
+    }, 400)
+
+    return
+  }
+
+  // Normal flow: show confession popup after shatter animation
   setTimeout(() => {
     showPopup.value = true
   }, 600)
+}
+
+function onEasterEggFinished() {
+  particleCanvasRef.value?.reassembleBurst(heartCenter.x, heartCenter.y, 40)
+  heartRef.value?.reset()
 }
 
 function onPopupClose() {
@@ -68,6 +87,9 @@ function onPopupClose() {
 
     <!-- Canvas particle layer -->
     <ParticleCanvas ref="particleCanvasRef" />
+
+    <!-- Easter egg overlay (every 5th click) -->
+    <EasterEggOverlay ref="easterEggRef" @finished="onEasterEggFinished" />
 
     <!-- Confession popup -->
     <ConfessionPopup

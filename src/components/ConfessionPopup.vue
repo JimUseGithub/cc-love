@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import messagesRaw from '../../material/messages.txt?raw'
 
 const props = defineProps<{
   visible: boolean
@@ -10,16 +11,10 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const messages = [
-  '遇见你，是我这辈子最美丽的意外。',
-  '你笑起来的样子，比世间所有风景都好看。',
-  '如果可以，我想把所有的温柔都给你。',
-  '我不贪心，只想和你有一个很长很长的未来。',
-  '你知道你和星星的区别吗？星星在天上，而你在我心里。',
-  '山野万里，你是我藏在微风里的欢喜。',
-  '所有的遗憾都被你填满，所有的期待都与你有关。',
-  '这个世界很大，但我的心很小，小到只能装下你一个人。',
-]
+const messages = messagesRaw
+  .split('\n')
+  .map(line => line.trim())
+  .filter(line => line.length > 0)
 
 const currentMessage = ref('')
 
