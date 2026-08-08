@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import AnimatedHeart from './components/AnimatedHeart.vue'
 import ConfessionTitle from './components/ConfessionTitle.vue'
 import FloatingHearts from './components/FloatingHearts.vue'
@@ -11,9 +11,19 @@ import ConfessionPopup from './components/ConfessionPopup.vue'
 const showPopup = ref(false)
 const particleCanvasRef = ref<InstanceType<typeof ParticleCanvas>>()
 const heartRef = ref<InstanceType<typeof AnimatedHeart>>()
+const audioRef = ref<HTMLAudioElement>()
 
 // Store heart center for reassemble
 let heartCenter = { x: 0, y: 0 }
+
+// Start background audio on first user interaction (browser autoplay policy)
+onMounted(() => {
+  const startAudio = () => {
+    audioRef.value?.play().catch(() => {})
+    document.removeEventListener('click', startAudio)
+  }
+  document.addEventListener('click', startAudio)
+})
 
 function onHeartClick(e: MouseEvent) {
   // Get heart center for the burst origin
@@ -41,6 +51,9 @@ function onPopupClose() {
 
 <template>
   <div class="app">
+    <!-- Background audio -->
+    <audio ref="audioRef" loop preload="auto" src="/background.mp3"></audio>
+
     <!-- Background effects -->
     <StarrySky />
     <MeteorShower />
