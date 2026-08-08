@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(///wsl.localhost/Ubuntu/root/**)",
+      "Read(///wsl.localhost/Ubuntu/root/workspace/**)",
+      "Bash(npm create *)"
+    ]
+  }
+}
