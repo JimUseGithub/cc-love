@@ -10,26 +10,59 @@ const formName = ref(appData.name.value)
 const formMessages = ref(appData.messages.value.join('\n'))
 const formCareWords = ref(appData.careWords.value.join('\n'))
 
-function onSave() {
-  appData.saveName(formName.value.trim() || '{name}')
-  appData.saveMessages(
-    formMessages.value
-      .split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 0)
-  )
-  appData.saveCareWords(
-    formCareWords.value
-      .split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 0)
-  )
+const saving = ref(false)
+const saved = ref(false)
+const error = ref('')
+
+const MSG_DURATION = 2000
+
+async function onSave() {
+  saving.value = true
+  saved.value = false
+  error.value = ''
+
+  const name = formName.value.trim() || '{name}'
+  const messages = formMessages.value
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0)
+  const careWords = formCareWords.value
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0)
+
+  const ok = await appData.saveAll(name, messages, careWords)
+
+  saving.value = false
+
+  if (ok) {
+    saved.value = true
+    setTimeout(() => { saved.value = false }, MSG_DURATION)
+  } else {
+    error.value = '保存失败，请确认 dev server 正在运行'
+    setTimeout(() => { error.value = '' }, MSG_DURATION + 1000)
+  }
 }
 
-function onReset() {
+async function onReset() {
   formName.value = '{name}'
   formMessages.value = ''
   formCareWords.value = ''
+
+  saving.value = true
+  error.value = ''
+
+  const ok = await appData.resetAll()
+
+  saving.value = false
+
+  if (ok) {
+    saved.value = true
+    setTimeout(() => { saved.value = false }, MSG_DURATION)
+  } else {
+    error.value = '重置失败，请确认 dev server 正在运行'
+    setTimeout(() => { error.value = '' }, MSG_DURATION + 1000)
+  }
 }
 
 function onBack() {
@@ -50,6 +83,14 @@ function onBack() {
         <h1 class="admin-title">⚙️ 数据管理</h1>
         <div class="spacer"></div>
       </div>
+
+      <!-- Toast messages -->
+      <Transition name="toast">
+        <div v-if="saved" class="toast toast-success">✅ 保存成功</div>
+      </Transition>
+      <Transition name="toast">
+        <div v-if="error" class="toast toast-error">❌ {{ error }}</div>
+      </Transition>
 
       <!-- Form -->
       <div class="admin-body">
@@ -92,8 +133,12 @@ function onBack() {
 
       <!-- Footer -->
       <div class="admin-footer">
-        <button class="btn-reset" @click="onReset">恢复默认</button>
-        <button class="btn-save" @click="onSave">💾 保存</button>
+        <button class="btn-reset" :disabled="saving" @click="onReset">
+          {{ saving ? '处理中...' : '恢复默认' }}
+        </button>
+        <button class="btn-save" :disabled="saving" @click="onSave">
+          {{ saving ? '⏳ 保存中...' : '💾 保存' }}
+        </button>
       </div>
     </div>
   </div>
@@ -123,6 +168,7 @@ function onBack() {
   max-height: 90dvh;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 /* ── Header ── */
@@ -166,6 +212,40 @@ function onBack() {
 .spacer {
   width: 36px;
   flex-shrink: 0;
+}
+
+/* ── Toast ── */
+.toast {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.toast-success {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #86efac;
+}
+
+.toast-error {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.toast-enter-active { transition: all 0.3s ease; }
+.toast-leave-active { transition: all 0.3s ease; }
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
 }
 
 /* ── Body ── */
@@ -277,9 +357,15 @@ function onBack() {
   color: #fff;
 }
 
-.btn-save:hover {
+.btn-save:hover:not(:disabled) {
   box-shadow: 0 0 20px rgba(255, 107, 157, 0.4);
   transform: translateY(-1px);
+}
+
+.btn-save:disabled,
+.btn-reset:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-reset {
@@ -288,7 +374,7 @@ function onBack() {
   border: 1px solid rgba(255, 107, 157, 0.2);
 }
 
-.btn-reset:hover {
+.btn-reset:hover:not(:disabled) {
   background: rgba(255, 107, 157, 0.08);
   color: var(--text-primary);
 }

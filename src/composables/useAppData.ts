@@ -2,7 +2,7 @@ import { ref, provide, inject, type InjectionKey, type Ref } from 'vue'
 import messagesRaw from '../../material/messages.txt?raw'
 import careWordsRaw from '../../material/care-words.txt?raw'
 
-// ── Default values from material files ──
+// ── Default values from material files (build-time fallback) ──
 function parseLines(raw: string): string[] {
   return raw
     .split('\n')
@@ -14,35 +14,27 @@ const defaultMessages = parseLines(messagesRaw)
 const defaultCareWords = parseLines(careWordsRaw)
 const defaultName = '{name}'
 
-// ── localStorage helpers ──
-function loadString(key: string, fallback: string): string {
-  try {
-    const stored = localStorage.getItem(key)
-    if (stored !== null) return stored
-  } catch { /* localStorage unavailable */ }
-  return fallback
+// ── API helpers ──
+interface DataPayload {
+  name: string
+  messages: string[]
+  careWords: string[]
 }
 
-function saveString(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value)
-  } catch { /* localStorage unavailable */ }
+async function fetchData(): Promise<DataPayload> {
+  const res = await fetch('/api/data')
+  if (!res.ok) throw new Error(`GET /api/data failed: ${res.status}`)
+  return res.json()
 }
 
-function loadLines(key: string, fallback: string[]): string[] {
-  try {
-    const stored = localStorage.getItem(key)
-    if (stored !== null) {
-      return parseLines(stored)
-    }
-  } catch { /* localStorage unavailable */ }
-  return [...fallback]
-}
-
-function saveLines(key: string, value: string[]): void {
-  try {
-    localStorage.setItem(key, value.join('\n'))
-  } catch { /* localStorage unavailable */ }
+async function pushData(data: DataPayload): Promise<DataPayload> {
+  const res = await fetch('/api/data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(`POST /api/data failed: ${res.status}`)
+  return res.json()
 }
 
 // ── Type ──
@@ -50,42 +42,113 @@ export interface AppData {
   name: Ref<string>
   messages: Ref<string[]>
   careWords: Ref<string[]>
-  saveName: (v: string) => void
-  saveMessages: (v: string[]) => void
-  saveCareWords: (v: string[]) => void
-  resetAll: () => void
+  ready: Ref<boolean>
+  loadData: () => Promise<void>
+  saveName: (v: string) => Promise<void>
+  saveMessages: (v: string[]) => Promise<void>
+  saveCareWords: (v: string[]) => Promise<void>
+  saveAll: (name: string, messages: string[], careWords: string[]) => Promise<boolean>
+  resetAll: () => Promise<boolean>
 }
 
 export const APP_DATA_KEY: InjectionKey<AppData> = Symbol('appData')
 
 // ── Provider (called once in App.vue setup) ──
 export function provideAppData(): AppData {
-  const name = ref(loadString('confession_name', defaultName))
-  const messages = ref(loadLines('confession_messages', defaultMessages))
-  const careWords = ref(loadLines('confession_carewords', defaultCareWords))
+  const name = ref(defaultName)
+  const messages = ref<string[]>([...defaultMessages])
+  const careWords = ref<string[]>([...defaultCareWords])
+  const ready = ref(false)
 
-  function saveName(v: string) {
+  /** Fetch persisted data from server file — call on mount */
+  async function loadData() {
+    try {
+      const data = await fetchData()
+      name.value = data.name || defaultName
+      messages.value = data.messages.length > 0 ? data.messages : [...defaultMessages]
+      careWords.value = data.careWords.length > 0 ? data.careWords : [...defaultCareWords]
+    } catch {
+      // API unavailable — keep defaults from ?raw imports
+    }
+    ready.value = true
+  }
+
+  async function saveAll(
+    newName: string,
+    newMessages: string[],
+    newCareWords: string[],
+  ): Promise<boolean> {
+    try {
+      const data = await pushData({
+        name: newName || defaultName,
+        messages: newMessages.length > 0 ? newMessages : [...defaultMessages],
+        careWords: newCareWords.length > 0 ? newCareWords : [...defaultCareWords],
+      })
+      name.value = data.name
+      messages.value = data.messages
+      careWords.value = data.careWords
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function saveName(v: string) {
     name.value = v
-    saveString('confession_name', v)
+    try {
+      await pushData({
+        name: v || defaultName,
+        messages: messages.value,
+        careWords: careWords.value,
+      })
+    } catch { /* ignore */ }
   }
 
-  function saveMessages(v: string[]) {
+  async function saveMessages(v: string[]) {
     messages.value = [...v]
-    saveLines('confession_messages', v)
+    try {
+      await pushData({
+        name: name.value,
+        messages: v.length > 0 ? v : [...defaultMessages],
+        careWords: careWords.value,
+      })
+    } catch { /* ignore */ }
   }
 
-  function saveCareWords(v: string[]) {
+  async function saveCareWords(v: string[]) {
     careWords.value = [...v]
-    saveLines('confession_carewords', v)
+    try {
+      await pushData({
+        name: name.value,
+        messages: messages.value,
+        careWords: v.length > 0 ? v : [...defaultCareWords],
+      })
+    } catch { /* ignore */ }
   }
 
-  function resetAll() {
-    saveName(defaultName)
-    saveMessages(defaultMessages)
-    saveCareWords(defaultCareWords)
+  async function resetAll(): Promise<boolean> {
+    try {
+      const data = await pushData({
+        name: defaultName,
+        messages: [...defaultMessages],
+        careWords: [...defaultCareWords],
+      })
+      name.value = data.name
+      messages.value = data.messages
+      careWords.value = data.careWords
+      return true
+    } catch {
+      name.value = defaultName
+      messages.value = [...defaultMessages]
+      careWords.value = [...defaultCareWords]
+      return false
+    }
   }
 
-  const data: AppData = { name, messages, careWords, saveName, saveMessages, saveCareWords, resetAll }
+  const data: AppData = {
+    name, messages, careWords, ready,
+    loadData, saveName, saveMessages, saveCareWords, saveAll, resetAll,
+  }
   provide(APP_DATA_KEY, data)
   return data
 }

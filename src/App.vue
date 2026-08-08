@@ -1,8 +1,13 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { provideAppData } from './composables/useAppData'
 
-// Provide reactive app data to all child components (both routes)
-provideAppData()
+const appData = provideAppData()
+
+// Load persisted data from server file on mount
+onMounted(() => {
+  appData.loadData()
+})
 </script>
 
 <template>
