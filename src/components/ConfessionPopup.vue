@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import messagesRaw from '../../material/messages.txt?raw'
+import { useAppData } from '../composables/useAppData'
 
 const props = defineProps<{
   visible: boolean
@@ -11,10 +11,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const messages = messagesRaw
-  .split('\n')
-  .map(line => line.trim())
-  .filter(line => line.length > 0)
+const appData = useAppData()
 
 const currentMessage = ref('')
 
@@ -22,7 +19,10 @@ watch(
   () => props.visible,
   (isVisible) => {
     if (isVisible) {
-      currentMessage.value = messages[Math.floor(Math.random() * messages.length)]
+      const msgs = appData.messages.value
+      if (msgs.length > 0) {
+        currentMessage.value = msgs[Math.floor(Math.random() * msgs.length)]
+      }
     }
   }
 )

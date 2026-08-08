@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onUnmounted } from 'vue'
-import careRaw from '../../material/care-words.txt?raw'
+import { useAppData } from '../composables/useAppData'
 
 // ── Constants ──
 const DOT_COUNT = 100
@@ -15,11 +15,10 @@ const FADE_OUT = 0.4          // seconds for overlay fade-out
 const PINK_PALETTE = ['#ff9ec4', '#ff6b9d', '#ff8a80', '#ea80fc', '#ff4081', '#ffb3c6', '#e91e63', '#ffb3c6']
 
 // ── Build phrase pool ──
+const appData = useAppData()
+
 function buildPhrasePool(): string[] {
-  const phrases = careRaw
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0)
+  const phrases = appData.careWords.value
 
   if (phrases.length === 0) return Array.from({ length: DOT_COUNT }, () => '❤️')
 

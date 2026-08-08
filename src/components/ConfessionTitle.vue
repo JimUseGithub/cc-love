@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useAppData } from '../composables/useAppData'
 
 defineProps<{
   name?: string
 }>()
 
-const displayName = computed(() => '可可')
+const appData = useAppData()
+const displayName = computed(() => appData.name.value || '{name}')
 </script>
 
 <template>
