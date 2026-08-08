@@ -1,10 +1,5 @@
-import { getStore } from '@netlify/blobs'
-import type { Handler, HandlerEvent, HandlerResponse } from '@netlify/functions'
+const { getStore, connectLambda } = require('@netlify/blobs')
 
-const STORE_NAME = 'confession-data'
-const STORE_KEY = 'config'
-
-// Default values — used to seed the blob store on first access
 const DEFAULTS = {
   name: '{name}',
   messages: [
@@ -32,38 +27,53 @@ const DEFAULTS = {
   ],
 }
 
-function corsHeaders(): Record<string, string> {
-  return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  }
+const STORE_NAME = 'confession-data'
+const STORE_KEY = 'config'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
 }
 
-export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResponse> => {
-  const headers = { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders() }
+exports.handler = async (event) => {
+  const headers = { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders }
 
   // CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers }
   }
 
+  // Initialize Blobs context from Lambda event
   try {
-    const store = getStore(STORE_NAME)
+    if (event.blobs) {
+      connectLambda(event)
+    }
+  } catch (e) {
+    console.error('[data] connectLambda failed:', e.message)
+  }
 
+  let store
+  try {
+    store = getStore(STORE_NAME)
+  } catch (e) {
+    console.error('[data] getStore failed:', e.message)
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Blobs storage unavailable', detail: e.message }),
+    }
+  }
+
+  try {
     if (event.httpMethod === 'GET') {
-      // Read from blob store; seed with defaults if empty
       let data = await store.get(STORE_KEY, { type: 'json' })
       if (!data) {
-        // First access — seed the store with defaults
+        console.log('[data] No existing data, seeding defaults')
         data = { ...DEFAULTS }
         await store.set(STORE_KEY, JSON.stringify(data))
       }
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify(data),
-      }
+      return { statusCode: 200, headers, body: JSON.stringify(data) }
     }
 
     if (event.httpMethod === 'POST') {
@@ -71,32 +81,31 @@ export const handler: Handler = async (event: HandlerEvent): Promise<HandlerResp
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing body' }) }
       }
 
-      const { name, messages, careWords } = JSON.parse(event.body)
+      const payload = JSON.parse(event.body)
       const data = {
-        name: typeof name === 'string' && name.trim() ? name.trim() : DEFAULTS.name,
-        messages: Array.isArray(messages) && messages.length > 0
-          ? messages.filter((m: string) => m.trim())
+        name: typeof payload.name === 'string' && payload.name.trim()
+          ? payload.name.trim() : DEFAULTS.name,
+        messages: Array.isArray(payload.messages) && payload.messages.length > 0
+          ? payload.messages.filter(m => m && m.trim())
           : DEFAULTS.messages,
-        careWords: Array.isArray(careWords) && careWords.length > 0
-          ? careWords.filter((w: string) => w.trim())
+        careWords: Array.isArray(payload.careWords) && payload.careWords.length > 0
+          ? payload.careWords.filter(w => w && w.trim())
           : DEFAULTS.careWords,
       }
 
       await store.set(STORE_KEY, JSON.stringify(data))
+      console.log('[data] Saved successfully, messages:', data.messages.length, 'careWords:', data.careWords.length)
 
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ ok: true, ...data }),
-      }
+      return { statusCode: 200, headers, body: JSON.stringify({ ok: true, ...data }) }
     }
 
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
   } catch (e) {
+    console.error('[data] Handler error:', e.message, e.stack)
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Internal server error' }),
+      body: JSON.stringify({ error: 'Internal server error', detail: e.message }),
     }
   }
 }
